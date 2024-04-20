@@ -107,10 +107,36 @@ data "coder_parameter" "disk_size" {
   default     = 10
 }
 
+data "coder_parameter" "forward_ports" {
+  name        = "Forward Port"
+  type        = "list(string)"
+  description = "Dev App forward port"
+  order        = 4
+  icon        = "https://upload.wikimedia.org/wikipedia/commons/f/fe/Cib-ripple_%28CoreUI_Icons_v1.0.0%29.svg"
+  mutable     = true
+  default     = jsonencode(["3000", "8080"])
+}
+
+data "coder_parameter" "forward_port_permission" {
+  name        = "Forward Port Sharing"
+  type        = "string"
+  description = "Mode for forwarding port"
+  order        = 5
+  icon        = "https://upload.wikimedia.org/wikipedia/commons/f/fe/Cib-ripple_%28CoreUI_Icons_v1.0.0%29.svg"
+  mutable     = true
+  default     = "authenticated"
+
+  validation {
+    regex     = "owner|authenticated|public"
+    error = "The environment must be one of 'owner', 'authenticated', or 'public'."
+  }
+
+}
+
 data "coder_parameter" "repo" {
   name         = "repo"
   display_name = "Repository (auto)"
-  order        = 4
+  order        = 6
   description  = "Select a repository to automatically clone and start working with a devcontainer."
   mutable      = true
   option {
@@ -148,7 +174,7 @@ data "coder_parameter" "repo" {
 data "coder_parameter" "custom_repo_url" {
   name         = "custom_repo"
   display_name = "Repository URL (custom)"
-  order        = 5
+  order        = 7
   default      = ""
   description  = "Optionally enter a custom repository URL, see [awesome-devcontainers](https://github.com/manekinekko/awesome-devcontainers)."
   mutable      = true
@@ -161,7 +187,7 @@ data "coder_parameter" "dotfiles_url" {
   default     = ""
   mutable     = true 
   icon        = "https://git-scm.com/images/logos/downloads/Git-Icon-1788C.png"
-  order       = 6
+  order       = 8
 }
 
 provider "kubernetes" {
@@ -254,6 +280,18 @@ resource "coder_app" "code-server" {
     interval  = 5
     threshold = 6
   }
+}
+
+resource "coder_app" "development-app" {
+  for_each = toset([for item in jsondecode(data.coder_parameter.forward_ports.value) : tostring(tonumber(item))])
+
+  agent_id     = coder_agent.main.id
+  slug         = "development-app-${each.value}"
+  display_name = "Dev App Port ${each.value}"
+  url          = "http://localhost:${each.value}"
+  icon         = "https://upload.wikimedia.org/wikipedia/commons/e/e0/Icon_webview.png"
+  subdomain    = true
+  share        = data.coder_parameter.forward_port_permission.value
 }
 
 resource "kubernetes_persistent_volume_claim" "workspaces" {
